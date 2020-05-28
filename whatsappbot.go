@@ -185,20 +185,22 @@ func relay(sender string, msg string) {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
         if e != nil {
-            log.Println(e)
+            continue
         }
         if _, e := f.Write([]byte(msg)); e != nil {
             log.Println(e)
+            continue
         }
         if e := f.Close(); e != nil {
             log.Println(e)
+            continue
         }
     }
 
     // relay to telegram
     telurl := "https://api.telegram.org/bot" + cfg.teltoken + "/sendMessage?chat_id=" + cfg.telchat + "&text="
     if _, e := http.Get(telurl + url.QueryEscape(msg)); e != nil {
-        log.Println("Telegram fail")
+        log.Printf("Telegram fail: %v\n", e)
     }
 }
 
