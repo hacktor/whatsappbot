@@ -26,6 +26,7 @@ type config struct {
     groupid  string
     infile   string
     attach   string
+    session   string
     ircfile  string
     sigfile  string
     matfile  string
@@ -55,19 +56,34 @@ func (h *waHandler) HandleError(err error) {
 
 //Optional to be implemented. Implement HandleXXXMessage for the types you need.
 func (*waHandler) HandleTextMessage(message whatsapp.TextMessage) {
+
     if message.Info.Timestamp < StartTime {
         fmt.Printf("Skipping old message (%v) with timestamp %v\n", message.Text, message.Info.Timestamp)
         return
     }
-    fmt.Printf("Timestamp: %v\nID: %v\nRemoteID: %v\nMsgID: %v\nText:\t%v\n", message.Info.Timestamp, message.Info.Id, message.Info.RemoteJid, message.ContextInfo.QuotedMessageID, message.Text)
+
+    if message.Info.RemoteJid != cfg.groupid {
+        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", message.Info.RemoteJid, cfg.groupid)
+        return
+    }
+
+    fmt.Printf("Timestamp: %v\nID: %v\nRemoteID: %v\nMsgID: %v\nText:\t%v\n",
+        message.Info.Timestamp, message.Info.Id, message.Info.RemoteJid, message.ContextInfo.QuotedMessageID, message.Text)
 }
 
 //Example for media handling. Video, Audio, Document are also possible in the same way
 func (h *waHandler) HandleImageMessage(message whatsapp.ImageMessage) {
+
     if message.Info.Timestamp < StartTime {
         fmt.Printf("Skipping old message (%v) with timestamp %v\n")
         return
     }
+
+    if message.Info.RemoteJid != cfg.groupid {
+        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", message.Info.RemoteJid, cfg.groupid)
+        return
+    }
+
     data, err := message.Download()
     if err != nil {
         if err != whatsapp.ErrMediaDownloadFailedWith410 && err != whatsapp.ErrMediaDownloadFailedWith404 {
@@ -103,6 +119,7 @@ func main() {
         cfg.groupid = tree.Get("whatsapp.groupid").(string)
         cfg.infile = tree.Get("whatsapp.infile").(string)
         cfg.attach = tree.Get("whatsapp.attachments").(string)
+        cfg.session = tree.Get("whatsapp.session").(string)
         cfg.ircfile = tree.Get("irc.infile").(string)
         cfg.sigfile = tree.Get("signal.infile").(string)
         cfg.matfile = tree.Get("matrix.infile").(string)
@@ -152,7 +169,8 @@ func main() {
 func infile(wac *whatsapp.Conn) {
 
     // keep a tail on the infile
-    if t, err := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true}); err != nil {
+    loc := &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END}
+    if t, err := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true, Location: loc}); err == nil {
 
         for line := range t.Lines {
             fmt.Println(line.Text)
@@ -222,7 +240,7 @@ func login(wac *whatsapp.Conn) error {
 
 func readSession() (whatsapp.Session, error) {
     session := whatsapp.Session{}
-    file, err := os.Open(os.TempDir() + "/whatsappSession.gob")
+    file, err := os.Open(cfg.session)
     if err != nil {
         return session, err
     }
@@ -236,7 +254,7 @@ func readSession() (whatsapp.Session, error) {
 }
 
 func writeSession(session whatsapp.Session) error {
-    file, err := os.Create(os.TempDir() + "/whatsappSession.gob")
+    file, err := os.Create(cfg.session)
     if err != nil {
         return err
     }
