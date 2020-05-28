@@ -16,6 +16,8 @@ import (
     "github.com/Rhymen/go-whatsapp"
     "github.com/pelletier/go-toml"
     "github.com/hpcloud/tail"
+    "net/http"
+    "net/url"
 )
 
 type waHandler struct {
@@ -26,12 +28,13 @@ type config struct {
     groupid  string
     infile   string
     attach   string
-    session   string
+    session  string
     ircfile  string
     sigfile  string
     matfile  string
     teltoken string
     telchat  string
+    anon     string
 }
 
 var cfg config
@@ -67,8 +70,12 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         return
     }
 
-    fmt.Printf("Timestamp: %v\nID: %v\nRemoteJid: %v\nSenderJid: %v\nMsgID: %v\nText:\t%v\n",
-        m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, m.Info.SenderJid, m.ContextInfo.QuotedMessageID, m.Text)
+    fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
+        m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
+    sender := getSender(*m.Info.Source.Participant)
+
+    //relay to irc, signal, matrix
+    relay(sender, m.Text)
 }
 
 //Image handling. Video, Audio, Document are also possible in the same way
@@ -113,18 +120,21 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 func main() {
 
     //get configuration
-    if tree, err := toml.LoadFile("/etc/hermod.toml"); err != nil {
+    if t, err := toml.LoadFile("/etc/hermod.toml"); err != nil {
         log.Fatalf("error loading configuration: %v\n", err)
     } else {
-        cfg.groupid = tree.Get("whatsapp.groupid").(string)
-        cfg.infile = tree.Get("whatsapp.infile").(string)
-        cfg.attach = tree.Get("whatsapp.attachments").(string)
-        cfg.session = tree.Get("whatsapp.session").(string)
-        cfg.ircfile = tree.Get("irc.infile").(string)
-        cfg.sigfile = tree.Get("signal.infile").(string)
-        cfg.matfile = tree.Get("matrix.infile").(string)
-        cfg.teltoken = tree.Get("telegram.token").(string)
-        cfg.telchat = tree.Get("telegram.chat_id").(string)
+        cfg = config{
+            groupid:  t.Get("whatsapp.groupid").(string),
+            infile:   t.Get("whatsapp.infile").(string),
+            attach:   t.Get("whatsapp.attachments").(string),
+            session:  t.Get("whatsapp.session").(string),
+            ircfile:  t.Get("irc.infile").(string),
+            sigfile:  t.Get("signal.infile").(string),
+            matfile:  t.Get("matrix.infile").(string),
+            teltoken: t.Get("telegram.token").(string),
+            telchat:  t.Get("telegram.chat_id").(string),
+            anon:     t.Get("common.anon").(string),
+        }
     }
 
     //create new WhatsApp connection
@@ -166,6 +176,39 @@ func main() {
     }
 }
 
+func relay(sender string, msg string) {
+
+    //relay to irc, signal, matrix
+    bridges := [3]string{cfg.ircfile, cfg.sigfile,cfg.matfile}
+    msg = "[wha] " + sender + ": " + msg + "\n"
+    for _, infile := range bridges {
+
+        f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+        if e != nil {
+            log.Fatal(e)
+        }
+        if _, e := f.Write([]byte(msg)); e != nil {
+            log.Fatal(e)
+        }
+        if e := f.Close(); e != nil {
+            log.Fatal(e)
+        }
+    }
+
+    // relay to telegram
+    telurl := "https://api.telegram.org/bot" + cfg.teltoken + "/sendMessage?chat_id=" + cfg.telchat + "&text="
+    if _, e := http.Get(telurl + url.QueryEscape(msg)); e != nil {
+        log.Println("Telegram fail")
+    }
+}
+
+func getSender(s string) string {
+
+    //anonymize telephone number
+    s = strings.Split(s,"@")[0]
+    return cfg.anon + "-" + s[7:]
+}
+
 func infile(wac *whatsapp.Conn) {
 
     // keep a tail on the infile
@@ -195,10 +238,9 @@ func infile(wac *whatsapp.Conn) {
             }
 
             if msgId, err := wac.Send(msg); err != nil {
-                fmt.Fprintf(os.Stderr, "error sending message: %v", err)
-                os.Exit(1)
+                log.Fatalf("error sending message: %v\n", err)
             } else {
-                fmt.Println("Message Sent -> ID : " + msgId)
+                fmt.Printf("Message Sent -> ID : %v\n", msgId)
             }
 
         }
