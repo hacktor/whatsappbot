@@ -185,13 +185,13 @@ func relay(sender string, msg string) {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
         if e != nil {
-            log.Fatal(e)
+            log.Println(e)
         }
         if _, e := f.Write([]byte(msg)); e != nil {
-            log.Fatal(e)
+            log.Println(e)
         }
         if e := f.Close(); e != nil {
-            log.Fatal(e)
+            log.Println(e)
         }
     }
 
