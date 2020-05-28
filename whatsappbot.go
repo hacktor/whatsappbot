@@ -55,49 +55,49 @@ func (h *waHandler) HandleError(err error) {
 }
 
 //Optional to be implemented. Implement HandleXXXMessage for the types you need.
-func (*waHandler) HandleTextMessage(message whatsapp.TextMessage) {
+func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
-    if message.Info.Timestamp < StartTime {
-        fmt.Printf("Skipping old message (%v) with timestamp %v\n", message.Text, message.Info.Timestamp)
+    if m.Info.Timestamp < StartTime {
+        fmt.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
         return
     }
 
-    if message.Info.RemoteJid != cfg.groupid {
-        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", message.Info.RemoteJid, cfg.groupid)
+    if m.Info.RemoteJid != cfg.groupid {
+        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
         return
     }
 
-    fmt.Printf("Timestamp: %v\nID: %v\nRemoteID: %v\nMsgID: %v\nText:\t%v\n",
-        message.Info.Timestamp, message.Info.Id, message.Info.RemoteJid, message.ContextInfo.QuotedMessageID, message.Text)
+    fmt.Printf("Timestamp: %v\nID: %v\nRemoteJid: %v\nSenderJid: %v\nMsgID: %v\nText:\t%v\n",
+        m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, m.Info.SenderJid, m.ContextInfo.QuotedMessageID, m.Text)
 }
 
-//Example for media handling. Video, Audio, Document are also possible in the same way
-func (h *waHandler) HandleImageMessage(message whatsapp.ImageMessage) {
+//Image handling. Video, Audio, Document are also possible in the same way
+func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 
-    if message.Info.Timestamp < StartTime {
+    if m.Info.Timestamp < StartTime {
         fmt.Printf("Skipping old message (%v) with timestamp %v\n")
         return
     }
 
-    if message.Info.RemoteJid != cfg.groupid {
-        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", message.Info.RemoteJid, cfg.groupid)
+    if m.Info.RemoteJid != cfg.groupid {
+        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
         return
     }
 
-    data, err := message.Download()
+    data, err := m.Download()
     if err != nil {
         if err != whatsapp.ErrMediaDownloadFailedWith410 && err != whatsapp.ErrMediaDownloadFailedWith404 {
             return
         }
-        if _, err = h.c.LoadMediaInfo(message.Info.RemoteJid, message.Info.Id, strconv.FormatBool(message.Info.FromMe)); err == nil {
-            data, err = message.Download()
+        if _, err = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); err == nil {
+            data, err = m.Download()
             if err != nil {
                 return
             }
         }
     }
 
-    filename := fmt.Sprintf("%v/%v.%v", os.TempDir(), message.Info.Id, strings.Split(message.Type, "/")[1])
+    filename := fmt.Sprintf("%v/%v.%v", cfg.attach, m.Info.Id, strings.Split(m.Type, "/")[1])
     file, err := os.Create(filename)
     defer file.Close()
     if err != nil {
@@ -107,7 +107,7 @@ func (h *waHandler) HandleImageMessage(message whatsapp.ImageMessage) {
     if err != nil {
         return
     }
-    log.Printf("%v %v\n\timage received, saved at:%v\n", message.Info.Timestamp, message.Info.RemoteJid, filename)
+    log.Printf("%v %v\n\timage received, saved at:%v\n", m.Info.Timestamp, m.Info.RemoteJid, filename)
 }
 
 func main() {
