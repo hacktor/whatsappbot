@@ -78,7 +78,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
     //scan for !setnick command
-    if m.Text[:8] == "!setnick" {
+    if len(m.Text) > 8 && m.Text[:8] == "!setnick" {
 
         parts := strings.Fields(m.Text)
         setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
