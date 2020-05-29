@@ -76,6 +76,14 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
     fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
+
+    //scan for !setnick command
+    if m.Text[:8] == "!setnick" {
+
+        parts := strings.Fields(m.Text)
+        setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
+    }
+
     sender := getNick(*m.Info.Source.Participant)
 
     //relay to irc, signal, matrix
