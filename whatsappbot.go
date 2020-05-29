@@ -10,6 +10,8 @@ import (
     "time"
     "strconv"
     "strings"
+    "database/sql"
+    _ "github.com/mattn/go-sqlite3"
 
     qrcodeTerminal "github.com/Baozisoftware/qrcode-terminal-go"
     "github.com/Rhymen/go-whatsapp/binary/proto"
@@ -27,6 +29,7 @@ type waHandler struct {
 type config struct {
     groupid  string
     infile   string
+    db       string
     attach   string
     url      string
     session  string
@@ -73,7 +76,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
     fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
-    sender := getSender(*m.Info.Source.Participant)
+    sender := getNick(*m.Info.Source.Participant)
 
     //relay to irc, signal, matrix
     relay(sender, m.Text)
@@ -116,7 +119,7 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         return
     }
     log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
-    sender := getSender(*m.Info.Source.Participant)
+    sender := getNick(*m.Info.Source.Participant)
     sender = "**" + sender
     text := " sends an image: " + cfg.url + "/" + filename
     if len(m.Caption) > 0 {
@@ -136,6 +139,7 @@ func main() {
         cfg = config{
             groupid:  t.Get("whatsapp.groupid").(string),
             infile:   t.Get("whatsapp.infile").(string),
+            db:       t.Get("whatsapp.db").(string),
             attach:   t.Get("whatsapp.attachments").(string),
             url:      t.Get("whatsapp.url").(string),
             session:  t.Get("whatsapp.session").(string),
@@ -215,11 +219,65 @@ func relay(sender string, msg string) {
     }
 }
 
-func getSender(s string) string {
+func getNick(sender string) string {
+
+    var anon = getAnon(sender)
+    var phone string
+    var nick string
+
+    //open database
+    db, e := sql.Open("sqlite3", cfg.db)
+    if e != nil {
+        log.Printf("Error opening db: %v\n", e)
+        return anon
+    }
+
+    rows, e := db.Query("SELECT phone, nick FROM alias")
+    if e != nil {
+        log.Printf("Query failed: %v\n", e)
+        return anon
+    }
+
+    for rows.Next() {
+
+        e = rows.Scan(&phone, &nick)
+        if e != nil {
+            return anon
+        }
+        if phone == sender {
+
+            // found a nick
+            return nick
+        }
+    }
+    return anon
+}
+
+func getAnon(sender string) string {
 
     //anonymize telephone number
-    s = strings.Split(s,"@")[0]
-    return cfg.anon + "-" + s[7:]
+    sender = strings.Split(sender,"@")[0]
+    return cfg.anon + "-" + sender[7:]
+}
+
+func setNick(sender string, nick string) {
+
+    //open database
+    db, e := sql.Open("sqlite3", cfg.db)
+    if e != nil {
+        log.Printf("Error opening db: %v\n", e)
+        return
+    }
+
+    stmt, e := db.Prepare("REPLACE INTO alias (phone, nick) values (?,?)")
+    if e != nil {
+        log.Printf("Prepare failed: %v\n", e)
+        return
+    }
+    _, e = stmt.Exec(sender, nick)
+    if e != nil {
+        log.Printf("Insert nick failed: %v\n", e)
+    }
 }
 
 func infile(wac *whatsapp.Conn) {
