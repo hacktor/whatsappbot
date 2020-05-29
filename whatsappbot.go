@@ -28,6 +28,7 @@ type config struct {
     groupid  string
     infile   string
     attach   string
+    url      string
     session  string
     ircfile  string
     sigfile  string
@@ -104,8 +105,8 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         }
     }
 
-    filename := fmt.Sprintf("%v/%v.%v", cfg.attach, m.Info.Id, strings.Split(m.Type, "/")[1])
-    file, err := os.Create(filename)
+    filename := fmt.Sprintf("%v.%v", m.Info.Id, strings.Split(m.Type, "/")[1])
+    file, err := os.Create(cfg.attach + "/" + filename)
     defer file.Close()
     if err != nil {
         return
@@ -114,7 +115,16 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
     if err != nil {
         return
     }
-    log.Printf("%v %v\n\timage received, saved at:%v\n", m.Info.Timestamp, m.Info.RemoteJid, filename)
+    log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
+    sender := getSender(*m.Info.Source.Participant)
+    sender = "**" + sender
+    text := " sends an image: " + cfg.url + "/" + filename
+    if len(m.Caption) > 0 {
+        text += " with caption: " + m.Caption
+    }
+
+    //relay to irc, signal, matrix
+    relay(sender, text)
 }
 
 func main() {
@@ -127,6 +137,7 @@ func main() {
             groupid:  t.Get("whatsapp.groupid").(string),
             infile:   t.Get("whatsapp.infile").(string),
             attach:   t.Get("whatsapp.attachments").(string),
+            url:      t.Get("whatsapp.url").(string),
             session:  t.Get("whatsapp.session").(string),
             ircfile:  t.Get("irc.infile").(string),
             sigfile:  t.Get("signal.infile").(string),
