@@ -10,8 +10,6 @@ import (
     "time"
     "strconv"
     "strings"
-    "database/sql"
-    _ "github.com/mattn/go-sqlite3"
 
     qrcodeTerminal "github.com/Baozisoftware/qrcode-terminal-go"
     "github.com/Rhymen/go-whatsapp/binary/proto"
@@ -41,14 +39,9 @@ type Config struct {
     anon     string
 }
 
-type Nick struct {
-    phone    string
-    nick     string
-}
-
 var cfg Config
 var StartTime = uint64(time.Now().Unix())
-var nicks = make(map[string]string)
+var ngs = generateNickGetSet()
 
 //HandleError needs to be implemented to be a valid WhatsApp handler
 func (h *waHandler) HandleError(err error) {
@@ -81,22 +74,22 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
     fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
-    sender := getNick(*m.Info.Source.Participant)
+    nick := ngs(Nick{ phone: *m.Info.Source.Participant, })
     text := m.Text
 
     //scan for !setnick command
     if len(text) > 8 && text[:8] == "!setnick" {
 
         parts := strings.Fields(m.Text)
-        nnick := setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
+        nnick := ngs(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], ""), })
         if len(nnick) > 0 {
-            relay("[wha] **" + sender + " is now known as " + nnick + "\n")
+            relay("[wha] **" + nick + " is now known as " + nnick + "\n")
             return
         }
     }
 
     //relay to irc, signal, matrix, telegram
-    relay("[wha] " + sender + ": " + text + "\n")
+    relay("[wha] " + nick + ": " + text + "\n")
 }
 
 //Image handling. Video, Audio, Document are also possible in the same way
@@ -136,15 +129,14 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         return
     }
     log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
-    sender := getNick(*m.Info.Source.Participant)
-    sender = "**" + sender
-    text := " sends an image: " + cfg.url + "/" + filename
+    nick := ngs(Nick{ phone: *m.Info.Source.Participant, })
+    text := "**" + nick + " sends an image: " + cfg.url + "/" + filename
     if len(m.Caption) > 0 {
         text += " with caption: " + m.Caption
     }
 
     //relay to irc, signal, matrix, telegram
-    relay("[wha] " + sender + ": " + text + "\n")
+    relay("[wha] " + text + "\n")
 }
 
 func main() {
@@ -233,77 +225,6 @@ func relay(msg string) {
     if _, e := http.Get(telurl + url.QueryEscape(msg)); e != nil {
         log.Printf("Telegram fail: %v\n", e)
     }
-}
-
-func getNick(sender string) string {
-
-    var anon = getAnon(sender)
-    var phone string
-    var nick string
-
-    //open database
-    db, e := sql.Open("sqlite3", cfg.db)
-    if e != nil {
-        log.Fatalf("Error opening db: %v\n", e)
-    }
-    defer db.Close()
-
-    rows, e := db.Query("SELECT phone, nick FROM alias")
-    if e != nil {
-        log.Printf("Query failed: %v\n", e)
-        return anon
-    }
-    defer rows.Close()
-
-    for rows.Next() {
-
-        e = rows.Scan(&phone, &nick)
-        if e != nil {
-            return anon
-        }
-        if phone == sender {
-
-            // found a nick
-            return nick
-        }
-    }
-    return anon
-}
-
-func getAnon(sender string) string {
-
-    //anonymize telephone number
-    sender = strings.Split(sender,"@")[0]
-    if len(sender) > 8 {
-        return cfg.anon + "-" + sender[7:]
-    } else {
-        return "Anonymous"
-    }
-}
-
-func setNick(sender string, nick string) string {
-
-    //open database
-    db, e := sql.Open("sqlite3", cfg.db)
-    if e != nil {
-        log.Printf("Error opening db: %v\n", e)
-        return ""
-    }
-    defer db.Close()
-
-    stmt, e := db.Prepare("REPLACE INTO alias (phone, nick) values (?,?)")
-    if e != nil {
-        log.Printf("Prepare failed: %v\n", e)
-        return ""
-    }
-    defer stmt.Close()
-
-    _, e = stmt.Exec(sender, nick)
-    if e != nil {
-        log.Printf("Insert nick failed: %v\n", e)
-        return ""
-    }
-    return nick
 }
 
 func infile(wac *whatsapp.Conn) {

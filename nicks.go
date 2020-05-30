@@ -80,7 +80,7 @@ func generateNickGetSet() func(Nick) string {
 
             } else {
 
-                return getAnon(n.phone),
+                return getAnon(n.phone)
 
             }
         }
