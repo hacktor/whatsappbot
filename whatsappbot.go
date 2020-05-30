@@ -26,7 +26,7 @@ type waHandler struct {
     c *whatsapp.Conn
 }
 
-type config struct {
+type Config struct {
     groupid  string
     infile   string
     db       string
@@ -41,8 +41,14 @@ type config struct {
     anon     string
 }
 
-var cfg config
+type Nick struct {
+    phone    string
+    nick     string
+}
+
+var cfg Config
 var StartTime = uint64(time.Now().Unix())
+var nicks = make(map[string]string)
 
 //HandleError needs to be implemented to be a valid WhatsApp handler
 func (h *waHandler) HandleError(err error) {
@@ -56,8 +62,6 @@ func (h *waHandler) HandleError(err error) {
         if err != nil {
             log.Fatalf("Restore failed: %v", err)
         }
-    } else {
-        log.Printf("error occoured: %v\n", err)
     }
 }
 
@@ -78,16 +82,21 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
     sender := getNick(*m.Info.Source.Participant)
-
-    //relay to irc, signal, matrix
-    relay(sender, m.Text)
+    text := m.Text
 
     //scan for !setnick command
-    if len(m.Text) > 8 && m.Text[:8] == "!setnick" {
+    if len(text) > 8 && text[:8] == "!setnick" {
 
         parts := strings.Fields(m.Text)
-        setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
+        nnick := setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
+        if len(nnick) > 0 {
+            relay("[wha] **" + sender + " is now known as " + nnick + "\n")
+            return
+        }
     }
+
+    //relay to irc, signal, matrix, telegram
+    relay("[wha] " + sender + ": " + text + "\n")
 }
 
 //Image handling. Video, Audio, Document are also possible in the same way
@@ -134,8 +143,8 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         text += " with caption: " + m.Caption
     }
 
-    //relay to irc, signal, matrix
-    relay(sender, text)
+    //relay to irc, signal, matrix, telegram
+    relay("[wha] " + sender + ": " + text + "\n")
 }
 
 func main() {
@@ -144,7 +153,7 @@ func main() {
     if t, e := toml.LoadFile("/etc/hermod.toml"); e != nil {
         log.Fatalf("error loading configuration: %v\n", e)
     } else {
-        cfg = config{
+        cfg = Config{
             groupid:  t.Get("whatsapp.groupid").(string),
             infile:   t.Get("whatsapp.infile").(string),
             db:       t.Get("whatsapp.db").(string),
@@ -199,11 +208,10 @@ func main() {
     }
 }
 
-func relay(sender string, msg string) {
+func relay(msg string) {
 
     //relay to irc, signal, matrix
     bridges := [3]string{cfg.ircfile, cfg.sigfile,cfg.matfile}
-    msg = "[wha] " + sender + ": " + msg + "\n"
     for _, infile := range bridges {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -273,26 +281,29 @@ func getAnon(sender string) string {
     }
 }
 
-func setNick(sender string, nick string) {
+func setNick(sender string, nick string) string {
 
     //open database
     db, e := sql.Open("sqlite3", cfg.db)
     if e != nil {
-        log.Fatalf("Error opening db: %v\n", e)
+        log.Printf("Error opening db: %v\n", e)
+        return ""
     }
     defer db.Close()
 
     stmt, e := db.Prepare("REPLACE INTO alias (phone, nick) values (?,?)")
     if e != nil {
         log.Printf("Prepare failed: %v\n", e)
-        return
+        return ""
     }
     defer stmt.Close()
 
     _, e = stmt.Exec(sender, nick)
     if e != nil {
         log.Printf("Insert nick failed: %v\n", e)
+        return ""
     }
+    return nick
 }
 
 func infile(wac *whatsapp.Conn) {
