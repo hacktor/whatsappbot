@@ -266,7 +266,11 @@ func getAnon(sender string) string {
 
     //anonymize telephone number
     sender = strings.Split(sender,"@")[0]
-    return cfg.anon + "-" + sender[7:]
+    if len(sender) > 8 {
+        return cfg.anon + "-" + sender[7:]
+    } else {
+        return "Anonymous"
+    }
 }
 
 func setNick(sender string, nick string) {
