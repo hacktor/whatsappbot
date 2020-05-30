@@ -77,17 +77,17 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
     fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
+    sender := getNick(*m.Info.Source.Participant)
+
+    //relay to irc, signal, matrix
+    relay(sender, m.Text)
+
     //scan for !setnick command
     if len(m.Text) > 8 && m.Text[:8] == "!setnick" {
 
         parts := strings.Fields(m.Text)
         setNick(*m.Info.Source.Participant, strings.Join(parts[1:], " "))
     }
-
-    sender := getNick(*m.Info.Source.Participant)
-
-    //relay to irc, signal, matrix
-    relay(sender, m.Text)
 }
 
 //Image handling. Video, Audio, Document are also possible in the same way
@@ -103,27 +103,27 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         return
     }
 
-    data, err := m.Download()
-    if err != nil {
-        if err != whatsapp.ErrMediaDownloadFailedWith410 && err != whatsapp.ErrMediaDownloadFailedWith404 {
+    data, e := m.Download()
+    if e != nil {
+        if e != whatsapp.ErrMediaDownloadFailedWith410 && e != whatsapp.ErrMediaDownloadFailedWith404 {
             return
         }
-        if _, err = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); err == nil {
-            data, err = m.Download()
-            if err != nil {
+        if _, e = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); e == nil {
+            data, e = m.Download()
+            if e != nil {
                 return
             }
         }
     }
 
     filename := fmt.Sprintf("%v.%v", m.Info.Id, strings.Split(m.Type, "/")[1])
-    file, err := os.Create(cfg.attach + "/" + filename)
+    file, e := os.Create(cfg.attach + "/" + filename)
     defer file.Close()
-    if err != nil {
+    if e != nil {
         return
     }
-    _, err = file.Write(data)
-    if err != nil {
+    _, e = file.Write(data)
+    if e != nil {
         return
     }
     log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
@@ -141,8 +141,8 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 func main() {
 
     //get configuration
-    if t, err := toml.LoadFile("/etc/hermod.toml"); err != nil {
-        log.Fatalf("error loading configuration: %v\n", err)
+    if t, e := toml.LoadFile("/etc/hermod.toml"); e != nil {
+        log.Fatalf("error loading configuration: %v\n", e)
     } else {
         cfg = config{
             groupid:  t.Get("whatsapp.groupid").(string),
@@ -161,24 +161,24 @@ func main() {
     }
 
     //create new WhatsApp connection
-    wac, err := whatsapp.NewConn(5 * time.Second)
-    if err != nil {
-        log.Fatalf("error creating connection: %v\n", err)
+    wac, e := whatsapp.NewConn(5 * time.Second)
+    if e != nil {
+        log.Fatalf("error creating connection: %v\n", e)
     }
 
     //Add handler
     wac.AddHandler(&waHandler{wac})
 
     //login or restore
-    if err := login(wac); err != nil {
-        log.Fatalf("error logging in: %v\n", err)
+    if e := login(wac); e != nil {
+        log.Fatalf("error logging in: %v\n", e)
     }
 
     //verifies phone connectivity
-    pong, err := wac.AdminTest()
+    pong, e := wac.AdminTest()
 
-    if !pong || err != nil {
-        log.Fatalf("error pinging in: %v\n", err)
+    if !pong || e != nil {
+        log.Fatalf("error pinging in: %v\n", e)
     }
 
     //start reading infile
@@ -190,12 +190,12 @@ func main() {
 
     //Disconnect safe
     fmt.Println("Shutting down now.")
-    session, err := wac.Disconnect()
-    if err != nil {
-        log.Fatalf("error disconnecting: %v\n", err)
+    session, e := wac.Disconnect()
+    if e != nil {
+        log.Fatalf("error disconnecting: %v\n", e)
     }
-    if err := writeSession(session); err != nil {
-        log.Fatalf("error saving session: %v", err)
+    if e := writeSession(session); e != nil {
+        log.Fatalf("error saving session: %v", e)
     }
 }
 
@@ -236,15 +236,16 @@ func getNick(sender string) string {
     //open database
     db, e := sql.Open("sqlite3", cfg.db)
     if e != nil {
-        log.Printf("Error opening db: %v\n", e)
-        return anon
+        log.Fatalf("Error opening db: %v\n", e)
     }
+    defer db.Close()
 
     rows, e := db.Query("SELECT phone, nick FROM alias")
     if e != nil {
         log.Printf("Query failed: %v\n", e)
         return anon
     }
+    defer rows.Close()
 
     for rows.Next() {
 
@@ -273,15 +274,17 @@ func setNick(sender string, nick string) {
     //open database
     db, e := sql.Open("sqlite3", cfg.db)
     if e != nil {
-        log.Printf("Error opening db: %v\n", e)
-        return
+        log.Fatalf("Error opening db: %v\n", e)
     }
+    defer db.Close()
 
     stmt, e := db.Prepare("REPLACE INTO alias (phone, nick) values (?,?)")
     if e != nil {
         log.Printf("Prepare failed: %v\n", e)
         return
     }
+    defer stmt.Close()
+
     _, e = stmt.Exec(sender, nick)
     if e != nil {
         log.Printf("Insert nick failed: %v\n", e)
@@ -292,7 +295,7 @@ func infile(wac *whatsapp.Conn) {
 
     // keep a tail on the infile
     loc := &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END}
-    if t, err := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true, Location: loc}); err == nil {
+    if t, e := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true, Location: loc}); e == nil {
 
         for line := range t.Lines {
             fmt.Println(line.Text)
@@ -316,8 +319,8 @@ func infile(wac *whatsapp.Conn) {
                 Text:        line.Text,
             }
 
-            if msgId, err := wac.Send(msg); err != nil {
-                log.Fatalf("error sending message: %v\n", err)
+            if msgId, e := wac.Send(msg); e != nil {
+                log.Fatalf("error sending message: %v\n", e)
             } else {
                 fmt.Printf("Message Sent -> ID : %v\n", msgId)
             }
@@ -325,18 +328,18 @@ func infile(wac *whatsapp.Conn) {
         }
 
     } else {
-        fmt.Printf("Error in tail file: %v\n", err)
+        fmt.Printf("Error in tail file: %v\n", e)
     }
 }
 
 func login(wac *whatsapp.Conn) error {
     //load saved session
-    session, err := readSession()
-    if err == nil {
+    session, e := readSession()
+    if e == nil {
         //restore session
-        session, err = wac.RestoreWithSession(session)
-        if err != nil {
-            return fmt.Errorf("restoring failed: %v\n", err)
+        session, e = wac.RestoreWithSession(session)
+        if e != nil {
+            return fmt.Errorf("restoring failed: %v\n", e)
         }
     } else {
         //no saved session -> regular login
@@ -345,45 +348,45 @@ func login(wac *whatsapp.Conn) error {
             terminal := qrcodeTerminal.New()
             terminal.Get(<-qr).Print()
         }()
-        session, err = wac.Login(qr)
-        if err != nil {
-            return fmt.Errorf("error during login: %v\n", err)
+        session, e = wac.Login(qr)
+        if e != nil {
+            return fmt.Errorf("error during login: %v\n", e)
         }
     }
 
     //save session
-    err = writeSession(session)
-    if err != nil {
-        return fmt.Errorf("error saving session: %v\n", err)
+    e = writeSession(session)
+    if e != nil {
+        return fmt.Errorf("error saving session: %v\n", e)
     }
     return nil
 }
 
 func readSession() (whatsapp.Session, error) {
     session := whatsapp.Session{}
-    file, err := os.Open(cfg.session)
-    if err != nil {
-        return session, err
+    file, e := os.Open(cfg.session)
+    if e != nil {
+        return session, e
     }
     defer file.Close()
     decoder := gob.NewDecoder(file)
-    err = decoder.Decode(&session)
-    if err != nil {
-        return session, err
+    e = decoder.Decode(&session)
+    if e != nil {
+        return session, e
     }
     return session, nil
 }
 
 func writeSession(session whatsapp.Session) error {
-    file, err := os.Create(cfg.session)
-    if err != nil {
-        return err
+    file, e := os.Create(cfg.session)
+    if e != nil {
+        return e
     }
     defer file.Close()
     encoder := gob.NewEncoder(file)
-    err = encoder.Encode(session)
-    if err != nil {
-        return err
+    e = encoder.Encode(session)
+    if e != nil {
+        return e
     }
     return nil
 }
