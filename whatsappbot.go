@@ -82,19 +82,32 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
     }
     text := m.Text
 
-    //scan for !setnick command
-    if len(text) > 8 && text[:8] == "!setnick" {
-
+    //scan for commands
+    switch {
+    case text[:5] == "!help":
+        f, e := os.OpenFile(cfg.infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+        if e != nil {
+            log.Printf("Open infile failed: %v\n", e)
+        }
+        fmt.Fprintf(f, "This group is bridged to IRC, Telegram, Signal and Matrix groups. Your telephone number is obfuscated when relayed to these channels. You are now known as %v. Use the !setnick command to change this\n", nick)
+        f.Close()
+    case len(text) > 8 && text[:8] == "!setnick":
         parts := strings.Fields(m.Text)
         nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], ""), }, cfg.db)
         if len(nnick) > 0 {
+            f, e := os.OpenFile(cfg.infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+            if e != nil {
+                log.Printf("Open infile failed: %v\n", e)
+            }
+            fmt.Fprintf(f, "%v is now known as %v.\n", nick, nnick)
+            f.Close()
             relay("[wha] **" + nick + " is now known as " + nnick + "\n")
-            return
         }
+    default:
+        //relay to irc, signal, matrix, telegram
+        relay("[wha] " + nick + ": " + text + "\n")
     }
 
-    //relay to irc, signal, matrix, telegram
-    relay("[wha] " + nick + ": " + text + "\n")
 }
 
 //Image handling. Video, Audio, Document are also possible in the same way
