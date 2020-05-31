@@ -12,13 +12,10 @@ type Nick struct {
     nick     string
 }
 
-func generateNickGetSet() func(Nick) string {
-
-    //this is the closure
-    var nicks = make(map[string]string)
+func initNicks(sqldb string) {
 
     //open database
-    db, e := sql.Open("sqlite3", "test.db")
+    db, e := sql.Open("sqlite3", sqldb)
     if e != nil {
         log.Fatalf("Error opening db: %v\n", e)
     }
@@ -42,61 +39,48 @@ func generateNickGetSet() func(Nick) string {
         }
         nicks[phone] = nick
     }
-
-    return func(n Nick) string {
-
-        //open database
-        db, e := sql.Open("sqlite3", "test.db")
-        if e != nil {
-            log.Fatalf("Error opening db: %v\n", e)
-        }
-        defer db.Close()
-
-        if len(n.phone) > 0 && len(n.nick) > 0 {
-
-            // new nick, insert
-
-            nicks[n.phone] = n.nick
-            stmt, e := db.Prepare("REPLACE INTO alias (phone,nick) values (?,?)")
-            defer stmt.Close()
-
-            if e != nil {
-                log.Printf("Prepare failed: %v\n", e)
-                return ""
-            }
-            defer stmt.Close()
-
-            _, e = stmt.Exec(n.phone, n.nick)
-            if e != nil {
-                log.Printf("Insert nick failed: %v\n", e)
-            }
-            return ""
-        } else if len(n.phone) > 0 {
-
-            // existing nick?
-            if nick, ok := nicks[n.phone]; ok {
-
-                return nick
-
-            } else {
-
-                return getAnon(n.phone)
-
-            }
-        }
-
-        // return empty nick 'cause idunno
-        return ""
-
-    } // end generated function
 }
 
-func getAnon(sender string) string {
+func setNick(n Nick, sqldb string) string {
+
+    //open database
+    db, e := sql.Open("sqlite3", sqldb)
+    if e != nil {
+        log.Printf("Error opening db: %v\n", e)
+        return ""
+    }
+    defer db.Close()
+
+    if len(n.phone) > 0 && len(n.nick) > 0 {
+
+        // new nick, insert
+
+        nicks[n.phone] = n.nick
+        stmt, e := db.Prepare("REPLACE INTO alias (phone,nick) values (?,?)")
+        if e != nil {
+            log.Printf("Prepare failed on db %v: %v\n", sqldb, e)
+            return ""
+        }
+        defer stmt.Close()
+
+        _, e = stmt.Exec(n.phone, n.nick)
+        if e != nil {
+            log.Printf("Replace nick failed: %v\n", e)
+            return ""
+        }
+        return n.nick
+    }
+
+    // return empty nick 'cause idunno
+    return ""
+}
+
+func getAnon(sender string, anon string) string {
 
     //anonymize telephone number
     sender = strings.Split(sender,"@")[0]
     if len(sender) > 8 {
-        return cfg.anon + "-" + sender[7:]
+        return anon + "-" + sender[7:]
     } else {
         return "Anonymous"
     }

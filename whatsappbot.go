@@ -41,7 +41,7 @@ type Config struct {
 
 var cfg Config
 var StartTime = uint64(time.Now().Unix())
-var ngs = generateNickGetSet()
+var nicks = make(map[string]string)
 
 //HandleError needs to be implemented to be a valid WhatsApp handler
 func (h *waHandler) HandleError(err error) {
@@ -74,14 +74,19 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
     fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
-    nick := ngs(Nick{ phone: *m.Info.Source.Participant, })
+    var nick string
+    if val, ok := nicks[*m.Info.Source.Participant]; ok {
+        nick = val
+    } else {
+        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
+    }
     text := m.Text
 
     //scan for !setnick command
     if len(text) > 8 && text[:8] == "!setnick" {
 
         parts := strings.Fields(m.Text)
-        nnick := ngs(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], ""), })
+        nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], ""), }, cfg.db)
         if len(nnick) > 0 {
             relay("[wha] **" + nick + " is now known as " + nnick + "\n")
             return
@@ -129,7 +134,13 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         return
     }
     log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
-    nick := ngs(Nick{ phone: *m.Info.Source.Participant, })
+
+    var nick string
+    if val, ok := nicks[*m.Info.Source.Participant]; ok {
+        nick = val
+    } else {
+        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
+    }
     text := "**" + nick + " sends an image: " + cfg.url + "/" + filename
     if len(m.Caption) > 0 {
         text += " with caption: " + m.Caption
@@ -160,6 +171,9 @@ func main() {
             anon:     t.Get("common.anon").(string),
         }
     }
+
+    //initialize Nick database
+    initNicks(cfg.db)
 
     //create new WhatsApp connection
     wac, e := whatsapp.NewConn(5 * time.Second)
