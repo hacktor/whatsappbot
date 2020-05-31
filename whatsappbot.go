@@ -58,7 +58,7 @@ func (h *waHandler) HandleError(err error) {
     }
 }
 
-//Optional to be implemented. Implement HandleXXXMessage for the types you need.
+// Implement HandleXXXMessage for any needed types
 func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
     if m.Info.Timestamp < StartTime {
@@ -110,7 +110,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
 }
 
-//Image handling. Video, Audio, Document are also possible in the same way
+// Implement HandleImageMessage
 func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 
     if m.Info.Timestamp < StartTime {
@@ -194,7 +194,7 @@ func main() {
         log.Fatalf("error creating connection: %v\n", e)
     }
 
-    //Add handler
+    //Add handlers
     wac.AddHandler(&waHandler{wac})
 
     //login or restore
@@ -202,7 +202,7 @@ func main() {
         log.Fatalf("error logging in: %v\n", e)
     }
 
-    //verifies phone connectivity
+    //verify phone connectivity
     pong, e := wac.AdminTest()
 
     if !pong || e != nil {
@@ -230,7 +230,7 @@ func main() {
 func relay(msg string) {
 
     //relay to irc, signal, matrix
-    bridges := [3]string{cfg.ircfile, cfg.sigfile,cfg.matfile}
+    bridges := [3]string{cfg.ircfile, cfg.sigfile, cfg.matfile}
     for _, infile := range bridges {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -238,7 +238,7 @@ func relay(msg string) {
             continue
         }
         if _, e := f.Write([]byte(msg)); e != nil {
-            log.Println(e)
+            log.Printf("Write to %v failed: %v\n", infile, e)
             continue
         }
         if e := f.Close(); e != nil {
@@ -263,6 +263,39 @@ func infile(wac *whatsapp.Conn) {
         for line := range t.Lines {
             fmt.Println(line.Text)
 
+            if line.Text[:5] == "FILE:" {
+
+                // Get file info and upload
+                parts := strings.Fields(line.Text)
+                info := strings.Split(parts[0], ":")
+
+                img, e := os.Open(info[2])
+                if e != nil {
+                    log.Printf("Failed to open file %v: %v\n", info[2], e)
+                    continue
+                }
+
+                msg := whatsapp.ImageMessage{
+                    Info: whatsapp.MessageInfo{
+                        RemoteJid: cfg.groupid,
+                    },
+                    Type:    info[1],
+                    Caption: strings.Join(parts[1:], " "),
+                    Content: img,
+                }
+
+                // debug
+                fmt.Printf("%+v\n", msg)
+
+                msgId, e := wac.Send(msg)
+                if e != nil {
+                    log.Printf("error sending message: %v", e)
+                } else {
+                    fmt.Println("Image Sent -> ID : "+msgId)
+                }
+                continue
+            }
+
             prevMessage := "?"
             quotedMessage := proto.Message{
                 Conversation: &prevMessage,
@@ -271,7 +304,7 @@ func infile(wac *whatsapp.Conn) {
             ContextInfo := whatsapp.ContextInfo{
                 QuotedMessage:   &quotedMessage,
                 QuotedMessageID: "",
-                Participant:     "", //Whot sent the original message
+                Participant:     "",
             }
 
             msg := whatsapp.TextMessage{
