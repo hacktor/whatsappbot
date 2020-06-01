@@ -32,20 +32,17 @@ type Config struct {
     attach   string
     url      string
     session  string
-    ircfile  string
-    sigfile  string
     sigurl   string
-    matfile  string
     teltoken string
     telchat  string
     telurl   string
     anon     string
+    bridges  []string
 }
 
 var cfg Config
 var StartTime = uint64(time.Now().Unix())
 var nicks = make(map[string]string)
-var bridges = []string{cfg.ircfile, cfg.sigfile, cfg.matfile}
 
 //HandleError needs to be implemented to be a valid WhatsApp handler
 func (h *waHandler) HandleError(err error) {
@@ -106,13 +103,13 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
             fmt.Fprintf(f, "%v is now known as %v.\n", nick, nnick)
             f.Close()
             msg := "[wha] **" + nick + " is now known as " + nnick + "\n"
-            relayToFile(msg, bridges)
+            relayToFile(msg, cfg.bridges)
             relayToTelegram(msg)
         }
     default:
         //relay to irc, signal, matrix, telegram
         msg := "[wha] " + nick + ": " + text + "\n"
-        relayToFile(msg, bridges)
+        relayToFile(msg, cfg.bridges)
         relayToTelegram(msg)
     }
 
@@ -168,7 +165,7 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
     }
 
     //relay to irc, signal, matrix, telegram
-    relayToFile("[wha] " + text + "\n", bridges)
+    relayToFile("[wha] " + text + "\n", cfg.bridges)
     relayToTelegram("[wha] " + text + "\n")
 }
 
@@ -223,7 +220,7 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
     text := "**" + nick + " sends a document: " + cfg.url + "/" + filename
 
     //relay to irc, signal, matrix, telegram
-    relayToFile("[wha] " + text + "\n", bridges)
+    relayToFile("[wha] " + text + "\n", cfg.bridges)
     relayToTelegram("[wha] " + text + "\n")
 }
 
@@ -240,14 +237,12 @@ func main() {
             attach:   t.Get("whatsapp.attachments").(string),
             url:      t.Get("whatsapp.url").(string),
             session:  t.Get("whatsapp.session").(string),
-            ircfile:  t.Get("irc.infile").(string),
-            sigfile:  t.Get("signal.infile").(string),
             sigurl:   t.Get("signal.url").(string),
-            matfile:  t.Get("matrix.infile").(string),
             teltoken: t.Get("telegram.token").(string),
             telchat:  t.Get("telegram.chat_id").(string),
             telurl:   t.Get("telegram.url").(string),
             anon:     t.Get("common.anon").(string),
+            bridges:  []string{t.Get("irc.infile").(string), t.Get("signal.infile").(string), t.Get("matrix.infile").(string)},
         }
     }
 
