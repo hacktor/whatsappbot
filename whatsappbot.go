@@ -6,6 +6,7 @@ import (
     "log"
     "os"
     "os/signal"
+    "path"
     "syscall"
     "time"
     "strconv"
@@ -33,15 +34,18 @@ type Config struct {
     session  string
     ircfile  string
     sigfile  string
+    sigurl   string
     matfile  string
     teltoken string
     telchat  string
+    telurl   string
     anon     string
 }
 
 var cfg Config
 var StartTime = uint64(time.Now().Unix())
 var nicks = make(map[string]string)
+var bridges = []string{cfg.ircfile, cfg.sigfile, cfg.matfile}
 
 //HandleError needs to be implemented to be a valid WhatsApp handler
 func (h *waHandler) HandleError(err error) {
@@ -62,16 +66,16 @@ func (h *waHandler) HandleError(err error) {
 func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
     if m.Info.Timestamp < StartTime {
-        fmt.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
+        log.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
         return
     }
 
     if m.Info.RemoteJid != cfg.groupid {
-        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
+        log.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
         return
     }
 
-    fmt.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
+    log.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
     var nick string
@@ -101,11 +105,15 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
             }
             fmt.Fprintf(f, "%v is now known as %v.\n", nick, nnick)
             f.Close()
-            relay("[wha] **" + nick + " is now known as " + nnick + "\n")
+            msg := "[wha] **" + nick + " is now known as " + nnick + "\n"
+            relayToFile(msg, bridges)
+            relayToTelegram(msg)
         }
     default:
         //relay to irc, signal, matrix, telegram
-        relay("[wha] " + nick + ": " + text + "\n")
+        msg := "[wha] " + nick + ": " + text + "\n"
+        relayToFile(msg, bridges)
+        relayToTelegram(msg)
     }
 
 }
@@ -114,12 +122,12 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 
     if m.Info.Timestamp < StartTime {
-        fmt.Printf("Skipping old message (%v) with timestamp %v\n")
+        log.Printf("Skipping old message (%v) with timestamp %v\n")
         return
     }
 
     if m.Info.RemoteJid != cfg.groupid {
-        fmt.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
+        log.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
         return
     }
 
@@ -160,7 +168,63 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
     }
 
     //relay to irc, signal, matrix, telegram
-    relay("[wha] " + text + "\n")
+    relayToFile("[wha] " + text + "\n", bridges)
+    relayToTelegram("[wha] " + text + "\n")
+}
+
+// Implement HandleDocumentMessage
+func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
+
+    // debug
+    log.Printf("%+v\n", m)
+
+    if m.Info.Timestamp < StartTime {
+        log.Printf("Skipping old message (%v) with timestamp %v\n")
+        return
+    }
+
+    if m.Info.RemoteJid != cfg.groupid {
+        log.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
+        return
+    }
+
+    data, e := m.Download()
+    if e != nil {
+        if e != whatsapp.ErrMediaDownloadFailedWith410 && e != whatsapp.ErrMediaDownloadFailedWith404 {
+            return
+        }
+        if _, e = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); e == nil {
+            data, e = m.Download()
+            if e != nil {
+                return
+            }
+        }
+    }
+
+    fsplit := strings.Split(m.FileName, ".")
+    filename := fmt.Sprintf("%v.%v", m.Info.Id, fsplit[len(fsplit)-1])
+    file, e := os.Create(cfg.attach + "/" + filename)
+    defer file.Close()
+    if e != nil {
+        return
+    }
+    _, e = file.Write(data)
+    if e != nil {
+        return
+    }
+    log.Printf("%v %v\n\tDocument received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
+
+    var nick string
+    if val, ok := nicks[*m.Info.Source.Participant]; ok {
+        nick = val
+    } else {
+        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
+    }
+    text := "**" + nick + " sends a document: " + cfg.url + "/" + filename
+
+    //relay to irc, signal, matrix, telegram
+    relayToFile("[wha] " + text + "\n", bridges)
+    relayToTelegram("[wha] " + text + "\n")
 }
 
 func main() {
@@ -178,9 +242,11 @@ func main() {
             session:  t.Get("whatsapp.session").(string),
             ircfile:  t.Get("irc.infile").(string),
             sigfile:  t.Get("signal.infile").(string),
+            sigurl:   t.Get("signal.url").(string),
             matfile:  t.Get("matrix.infile").(string),
             teltoken: t.Get("telegram.token").(string),
             telchat:  t.Get("telegram.chat_id").(string),
+            telurl:   t.Get("telegram.url").(string),
             anon:     t.Get("common.anon").(string),
         }
     }
@@ -227,10 +293,9 @@ func main() {
     }
 }
 
-func relay(msg string) {
+func relayToFile(msg string, bridges []string) {
 
     //relay to irc, signal, matrix
-    bridges := [3]string{cfg.ircfile, cfg.sigfile, cfg.matfile}
     for _, infile := range bridges {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -246,6 +311,9 @@ func relay(msg string) {
             continue
         }
     }
+}
+
+func relayToTelegram(msg string) {
 
     // relay to telegram
     telurl := "https://api.telegram.org/bot" + cfg.teltoken + "/sendMessage?chat_id=" + cfg.telchat + "&text="
@@ -261,17 +329,19 @@ func infile(wac *whatsapp.Conn) {
     if t, e := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true, Location: loc}); e == nil {
 
         for line := range t.Lines {
-            fmt.Println(line.Text)
 
-            if line.Text[:5] == "FILE:" {
+            text := line.Text
+            fmt.Println(text)
+
+            if text[:5] == "FILE:" {
 
                 // Get file info and upload
-                parts := strings.Fields(line.Text)
+                parts := strings.Fields(text)
                 info := strings.Split(parts[0], ":")
 
-                img, e := os.Open(info[2])
+                img, e := os.Open(info[3])
                 if e != nil {
-                    log.Printf("Failed to open file %v: %v\n", info[2], e)
+                    log.Printf("Failed to open file %v: %v\n", info[3], e)
                     continue
                 }
 
@@ -279,7 +349,7 @@ func infile(wac *whatsapp.Conn) {
                     Info: whatsapp.MessageInfo{
                         RemoteJid: cfg.groupid,
                     },
-                    Type:    info[1],
+                    Type:    info[2],
                     Caption: strings.Join(parts[1:], " "),
                     Content: img,
                 }
@@ -289,11 +359,26 @@ func infile(wac *whatsapp.Conn) {
 
                 msgId, e := wac.Send(msg)
                 if e != nil {
+
+                    // upload failed; fallthrough as link
                     log.Printf("error sending message: %v", e)
+                    var link string
+
+                    switch info[1] {
+                    case "TEL":
+                        link = cfg.telurl + "/" + path.Base(info[3])
+                    case "SIG":
+                        link = cfg.sigurl + "/" + path.Base(info[3])
+                    }
+                    text = strings.Join(parts[1:], " ") + " ( " + link + " )\n"
+
                 } else {
+
+                    // upload succeeded; go to next line
                     fmt.Println("Image Sent -> ID : "+msgId)
+                    continue
+
                 }
-                continue
             }
 
             prevMessage := "?"
@@ -312,7 +397,7 @@ func infile(wac *whatsapp.Conn) {
                     RemoteJid: cfg.groupid,
                 },
                 ContextInfo: ContextInfo,
-                Text:        line.Text,
+                Text:        text,
             }
 
             if msgId, e := wac.Send(msg); e != nil {
