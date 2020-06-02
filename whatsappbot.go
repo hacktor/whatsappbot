@@ -328,7 +328,7 @@ func infile(wac *whatsapp.Conn) {
             text := line.Text
             fmt.Println(text)
 
-            if len(text) > 5 and text[:5] == "FILE:" {
+            if len(text) > 5 && text[:5] == "FILE:" {
 
                 // Get file info and upload
                 parts := strings.Fields(text)
