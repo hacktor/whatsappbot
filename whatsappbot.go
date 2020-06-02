@@ -431,7 +431,7 @@ func infile(wac *whatsapp.Conn) {
             }
 
             if msgId, e := wac.Send(msg); e != nil {
-                log.Fatalf("error sending message: %v\n", e)
+                log.Printf("error sending message: %v\n", e)
             } else {
                 fmt.Printf("Message Sent -> ID : %v\n", msgId)
             }
