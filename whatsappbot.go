@@ -66,6 +66,10 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         log.Println("TextMessage.Info is nil")
         return
     }
+    if m.Info.Source == nil {
+        log.Println("ImageMessage.Info.Source is nil")
+        return
+    }
 
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
