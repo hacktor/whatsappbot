@@ -94,7 +94,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         f.Close()
     case len(text) > 8 && text[:8] == "!setnick":
         parts := strings.Fields(m.Text)
-        nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], ""), }, cfg.db)
+        nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], " "), }, cfg.db)
         if len(nnick) > 0 {
             f, e := os.OpenFile(cfg.infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
             if e != nil {
