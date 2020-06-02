@@ -62,6 +62,11 @@ func (h *waHandler) HandleError(err error) {
 // Implement HandleXXXMessage for any needed types
 func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
+    if &m.Info == nil {
+        log.Println("TextMessage.Info is nil")
+        return
+    }
+
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
         return
@@ -118,6 +123,15 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 // Implement HandleImageMessage
 func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 
+    if &m.Info == nil {
+        log.Println("ImageMessage.Info is nil")
+        return
+    }
+    if m.Info.Source == nil {
+        log.Println("ImageMessage.Info.Source is nil")
+        return
+    }
+
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n")
         return
@@ -172,8 +186,14 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 // Implement HandleDocumentMessage
 func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
 
-    // debug
-    log.Printf("%+v\n", m)
+    if &m.Info == nil {
+        log.Println("DocumentMessage.Info is nil")
+        return
+    }
+    if m.Info.Source == nil {
+        log.Println("DocumentMessage.Info.Source is nil")
+        return
+    }
 
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n")
@@ -332,7 +352,16 @@ func infile(wac *whatsapp.Conn) {
 
                 // Get file info and upload
                 parts := strings.Fields(text)
+                if len(parts) < 2 {
+                    log.Println("Too few parts in FILE line")
+                    continue
+                }
                 info := strings.Split(parts[0], ":")
+
+                if len(info) < 4 {
+                    log.Println("FILE info is garbage")
+                    continue
+                }
 
                 img, e := os.Open(info[3])
                 if e != nil {
@@ -364,6 +393,8 @@ func infile(wac *whatsapp.Conn) {
                         link = cfg.telurl + "/" + path.Base(info[3])
                     case "SIG":
                         link = cfg.sigurl + "/" + path.Base(info[3])
+                    default:
+                        continue
                     }
                     text = strings.Join(parts[1:], " ") + " ( " + link + " )\n"
 
