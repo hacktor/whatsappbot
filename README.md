@@ -26,32 +26,29 @@ token           = "999999999:XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 [whatsapp]
 groupid         = "11111111111-1111111111@g.us"
 infile          = "/home/hermod/log/towhatsapp.log"
-db              = "/home/hermod/db/whatsapp.db"
-debug           = "/home/hermod/log/whatsapp.debug"
+nicks           = "/home/hermod/db/whatsapp.gob"
 attachments     = "/var/www/html/whatsapp"
 session         = "/home/hermod/db/whatsappsession.gob"
 
 ```
+Only the [common] and [whatsapp] sections are mandatory. The bot listens in a whatsapp group and copies messages, prefixed with "[wha] <anonymized>", where the whatsapp users' telephone number is replaced with a string (common.anon from the toml configuration) and its last 4 numbers. The messages are then written to the infiles of gateways to [Signal, IRC, Telegram and/or Matrix](https://github.com/Piratenpartij/signal-irc-telegram-gateway).
+
+Those other gateways in turn write messages from their channels/groups/rooms to whatsapp.infile. They are relayed unchanged by whatsappbot to the whatsapp group.
 
 ## Configuration
 
 Make a copy of the file hermod.toml.example to /etc/hermod.toml and change values
 appropriately
 
-The bot keeps a small sqlite database **whatsapp**->**db**, used for mapping whatsapp telephone numbers (in the whatsapp group) to nicknames. Members of the whatsapp group can set their nick by issuing the command:
+The bot keeps a small binary gob database **whatsapp**->**nicks**, used for mapping whatsapp telephone numbers (in the whatsapp group) to nicknames. Members of the whatsapp group can set their nick by issuing the command:
 ```text
 !setnick nickname
 ```
 In the whatsapp group. The bot will update the mapping in the database and confirm this by saying:
 ```text
-Anonymous-XXXX is now known as nickname
+Anonymous-XXXX is now known as **nickname**
 ```
 In all channels.
-
-You need to create an sqlite database file:
-```sql
-sqlite> CREATE TABLE alias (phone text unique not null, nick text);
-```
 
 ## Directories for attachments and urls
 
