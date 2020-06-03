@@ -28,7 +28,7 @@ type waHandler struct {
 type Config struct {
     groupid  string
     infile   string
-    db       string
+    nicks    string
     attach   string
     url      string
     session  string
@@ -103,7 +103,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         f.Close()
     case len(text) > 8 && text[:8] == "!setnick":
         parts := strings.Fields(m.Text)
-        nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], " "), }, cfg.db)
+        nnick := setNick(Nick{ phone: *m.Info.Source.Participant, nick: strings.Join(parts[1:], " "), }, cfg.nicks)
         if len(nnick) > 0 {
             f, e := os.OpenFile(cfg.infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
             if e != nil {
@@ -257,7 +257,7 @@ func main() {
         cfg = Config{
             groupid:  t.Get("whatsapp.groupid").(string),
             infile:   t.Get("whatsapp.infile").(string),
-            db:       t.Get("whatsapp.db").(string),
+            nicks  :  t.Get("whatsapp.nicks").(string),
             attach:   t.Get("whatsapp.attachments").(string),
             url:      t.Get("whatsapp.url").(string),
             session:  t.Get("whatsapp.session").(string),
@@ -271,7 +271,7 @@ func main() {
     }
 
     //initialize Nick database
-    initNicks(cfg.db)
+    readNicks(cfg.nicks)
 
     //create new WhatsApp connection
     wac, e := whatsapp.NewConn(5 * time.Second)

@@ -1,10 +1,10 @@
 package main
 
 import (
+    "encoding/gob"
     "log"
     "strings"
-    "database/sql"
-    _ "github.com/mattn/go-sqlite3"
+    "os"
 )
 
 type Nick struct {
@@ -12,60 +12,16 @@ type Nick struct {
     nick     string
 }
 
-func initNicks(sqldb string) {
-
-    //open database
-    db, e := sql.Open("sqlite3", sqldb)
-    if e != nil {
-        log.Fatalf("Error opening db: %v\n", e)
-    }
-    defer db.Close()
-
-    rows, e := db.Query("SELECT phone, nick FROM alias")
-    if e != nil {
-        log.Fatalf("Query failed: %v\n", e)
-    }
-    defer rows.Close()
-
-    for rows.Next() {
-
-        var phone string
-        var nick string
-
-        e = rows.Scan(&phone, &nick)
-        if e != nil {
-            log.Printf("rows.Scan failed: %v\n", e)
-            continue
-        }
-        nicks[phone] = nick
-    }
-}
-
-func setNick(n Nick, sqldb string) string {
-
-    //open database
-    db, e := sql.Open("sqlite3", sqldb)
-    if e != nil {
-        log.Printf("Error opening db: %v\n", e)
-        return ""
-    }
-    defer db.Close()
+func setNick(n Nick, nickmap string) string {
 
     if len(n.phone) > 0 && len(n.nick) > 0 {
 
         // new nick, insert
 
         nicks[n.phone] = n.nick
-        stmt, e := db.Prepare("REPLACE INTO alias (phone,nick) values (?,?)")
+        e := writeNicks(nicks, nickmap)
         if e != nil {
-            log.Printf("Prepare failed on db %v: %v\n", sqldb, e)
-            return ""
-        }
-        defer stmt.Close()
-
-        _, e = stmt.Exec(n.phone, n.nick)
-        if e != nil {
-            log.Printf("Replace nick failed: %v\n", e)
+            log.Printf("Saving nicks to gob %v failed: %v\n", nickmap, e)
             return ""
         }
         return n.nick
@@ -84,5 +40,31 @@ func getAnon(sender string, anon string) string {
     } else {
         return "Anonymous"
     }
+}
+
+func readNicks(nickgob string) (map[string]string, error) {
+    nicks := make(map[string]string)
+    file, e := os.Open(nickgob)
+    if e != nil {
+        return nicks, e
+    }
+    defer file.Close()
+    decoder := gob.NewDecoder(file)
+    e = decoder.Decode(&nicks)
+    if e != nil {
+        return nicks, e
+    }
+    return nicks, nil
+}
+
+func writeNicks(nicks map[string]string, nickgob string) error {
+    file, e := os.Create(nickgob)
+    if e != nil {
+        return e
+    }
+    defer file.Close()
+    encoder := gob.NewEncoder(file)
+    e = encoder.Encode(nicks)
+    return e
 }
 
