@@ -42,19 +42,19 @@ func getAnon(sender string, anon string) string {
     }
 }
 
-func readNicks(nickgob string) (map[string]string, error) {
+func readNicks(nickgob string) (map[string]string) {
     nicks := make(map[string]string)
     file, e := os.Open(nickgob)
     if e != nil {
-        return nicks, e
+        return nicks
     }
     defer file.Close()
     decoder := gob.NewDecoder(file)
     e = decoder.Decode(&nicks)
     if e != nil {
-        return nicks, e
+        return nicks
     }
-    return nicks, nil
+    return nicks
 }
 
 func writeNicks(nicks map[string]string, nickgob string) error {

@@ -268,7 +268,7 @@ func main() {
     }
 
     //initialize Nick database
-    readNicks(cfg.nicks)
+    nicks = readNicks(cfg.nicks)
 
     //create new WhatsApp connection
     wac, e := whatsapp.NewConn(5 * time.Second)
