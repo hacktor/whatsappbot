@@ -91,7 +91,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 
     //scan for commands
     switch {
-    case text[:5] == "!help":
+    case len(text) >= 5 && text[:5] == "!help":
         f, e := os.OpenFile(cfg.infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
         if e != nil {
             log.Printf("Open infile failed: %v\n", e)
