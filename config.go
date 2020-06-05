@@ -99,7 +99,7 @@ func getConfig(c string) Config {
 
     if ! t.Has("common.anon") {
         log.Println("common.anon undefined")
-        cfg.anon = ""
+        cfg.anon = "Anonymous"
     } else {
         cfg.anon = t.Get("common.anon").(string)
     }
