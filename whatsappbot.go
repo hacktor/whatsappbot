@@ -13,28 +13,12 @@ import (
 
     qrcodeTerminal "github.com/Baozisoftware/qrcode-terminal-go"
     "github.com/Rhymen/go-whatsapp"
-    "github.com/pelletier/go-toml"
     "net/http"
     "net/url"
 )
 
 type waHandler struct {
     c *whatsapp.Conn
-}
-
-type Config struct {
-    groupid  string
-    infile   string
-    nicks    string
-    attach   string
-    url      string
-    session  string
-    sigurl   string
-    teltoken string
-    telchat  string
-    telurl   string
-    anon     string
-    bridges  []string
 }
 
 var cfg Config
@@ -248,24 +232,7 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
 func main() {
 
     //get configuration
-    if t, e := toml.LoadFile("/etc/hermod.toml"); e != nil {
-        log.Fatalf("error loading configuration: %v\n", e)
-    } else {
-        cfg = Config{
-            groupid:  t.Get("whatsapp.groupid").(string),
-            infile:   t.Get("whatsapp.infile").(string),
-            nicks  :  t.Get("whatsapp.nicks").(string),
-            attach:   t.Get("whatsapp.attachments").(string),
-            url:      t.Get("whatsapp.url").(string),
-            session:  t.Get("whatsapp.session").(string),
-            sigurl:   t.Get("signal.url").(string),
-            teltoken: t.Get("telegram.token").(string),
-            telchat:  t.Get("telegram.chat_id").(string),
-            telurl:   t.Get("telegram.url").(string),
-            anon:     t.Get("common.anon").(string),
-            bridges:  []string{t.Get("irc.infile").(string), t.Get("signal.infile").(string), t.Get("matrix.infile").(string)},
-        }
-    }
+    cfg = getConfig("/etc/hermod.toml")
 
     //initialize Nick database
     nicks = readNicks(cfg.nicks)
