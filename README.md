@@ -18,10 +18,12 @@ infile          = "/home/hermod/log/tomatrix.log"
 
 [signal]
 infile          = "/home/hermod/log/tosignal.log"
+url             = "/var/www/html/signal"
 
 [telegram]
 chat_id         = "-1111111111111"
 token           = "999999999:XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+url             = "/var/www/html/telegram"
 
 [whatsapp]
 groupid         = "11111111111-1111111111@g.us"
@@ -29,6 +31,7 @@ infile          = "/home/hermod/log/towhatsapp.log"
 nicks           = "/home/hermod/db/whatsapp.gob"
 attachments     = "/var/www/html/whatsapp"
 session         = "/home/hermod/db/whatsappsession.gob"
+url             = "/var/www/html/whatsapp"
 
 ```
 Only the [common] and [whatsapp] sections are mandatory. The bot listens in a whatsapp group and copies messages, prefixed with "[wha] <anonymized>", where the whatsapp users' telephone number is replaced with a string (common.anon from the toml configuration) and its last 4 numbers. The messages are then written to the infiles of gateways to [Signal, IRC, Telegram and/or Matrix](https://github.com/Piratenpartij/signal-irc-telegram-gateway).
