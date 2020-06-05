@@ -34,7 +34,7 @@ session         = "/home/hermod/db/whatsappsession.gob"
 url             = "/var/www/html/whatsapp"
 
 ```
-Only the [common] and [whatsapp] sections are mandatory. The bot listens in a whatsapp group and copies messages, prefixed with "[wha] <anonymized>", where the whatsapp users' telephone number is replaced with a string (common.anon from the toml configuration) and its last 4 numbers. The messages are then written to the infiles of gateways to [Signal, IRC, Telegram and/or Matrix](https://github.com/Piratenpartij/signal-irc-telegram-gateway).
+Only the [whatsapp.groupid] key is mandatory. All other keys have dummy defaults meaning they will largely be ignored. The bot listens in a whatsapp group and copies messages, prefixed with "[wha] <anonymized>", where the whatsapp users' telephone number is replaced with a string (common.anon from the toml configuration) and its last 4 numbers. The messages are then written to the infiles of gateways to [Signal, IRC, Telegram and/or Matrix](https://github.com/Piratenpartij/signal-irc-telegram-gateway).
 
 Those other gateways in turn write messages from their channels/groups/rooms to whatsapp.infile. They are relayed unchanged by whatsappbot to the whatsapp group.
 
