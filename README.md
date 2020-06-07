@@ -1,42 +1,38 @@
-# Whatsapp Bot
+# Hermod Whatsapp Bot
 
 [Hermod, or Hermóðr](https://en.wikipedia.org/wiki/Herm%C3%B3%C3%B0r) is a figure in Norse mythology,
 often considered the messenger of the gods
 
-This bot is used in tandem with the [Signal IRC Telegram Matrix Gateway](https://github.com/Piratenpartij/signal-irc-telegram-gateway). Configurable with the same toml configuration file. The relevant sections of this configuration file are as follows:
+This bot is used in a whatsapp group, relays messages to and from the group. For now it has an incoming infile and multiple configurable outgoing files (bridges) for relaying messages to other programs. In the near future, a socket server is planned to control the bot as well as a means to relay whatsapp messages over the network to other services. It's also possible to relay to a telegram group.
+
+By default, a toml configuration file is read from /etc/hermod.toml
 
 ```toml
 [common]
 sendalarm       = "/home/hermod/bin/alarm"
 anon            = "Anonymous"
-
-[irc]
-infile          = "/home/hermod/log/toirc.log"
-
-[matrix]
-infile          = "/home/hermod/log/tomatrix.log"
-
-[signal]
-infile          = "/home/hermod/log/tosignal.log"
-url             = "/var/www/html/signal"
+bridges         = [
+    "/home/hermod/log/fromwhatsapp.log",
+    "/home/hermod/log/toanotherapp.log"
+]
 
 [telegram]
 chat_id         = "-1111111111111"
 token           = "999999999:XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-url             = "/var/www/html/telegram"
 
 [whatsapp]
 groupid         = "11111111111-1111111111@g.us"
 infile          = "/home/hermod/log/towhatsapp.log"
 nicks           = "/home/hermod/db/whatsapp.gob"
+prefix          = "[whatsapp] "
 attachments     = "/var/www/html/whatsapp"
 session         = "/home/hermod/db/whatsappsession.gob"
 url             = "/var/www/html/whatsapp"
 
 ```
-Only the [whatsapp.groupid] key is mandatory. All other keys have dummy defaults meaning they will largely be ignored. The bot listens in a whatsapp group and copies messages, prefixed with "[wha] <anonymized>", where the whatsapp users' telephone number is replaced with a string (common.anon from the toml configuration) and its last 4 numbers. The messages are then written to the infiles of gateways to [Signal, IRC, Telegram and/or Matrix](https://github.com/Piratenpartij/signal-irc-telegram-gateway).
+Only the [whatsapp.groupid] key is mandatory. All other keys have dummy defaults meaning they will largely be ignored. The bot listens in a whatsapp group and copies messages, prefixed with "[prefix] <anonymized>", where the whatsapp users' telephone number is replaced with a string (**common.anon** from the toml configuration if defined) and its last 4 numbers. If **whatsapp.prefix** is defined that will also be prefixed before relaying to the bridges.
 
-Those other gateways in turn write messages from their channels/groups/rooms to whatsapp.infile. They are relayed unchanged by whatsappbot to the whatsapp group.
+The messages are then written to the defined bridge files, and can be picked up by other bots or applications.
 
 ## Configuration
 
@@ -57,7 +53,18 @@ In all channels.
 
 The photo's and attachments send by people in the whatsapp group are downloaded and placed in a directory. Use the **whatsapp-\>attachments** configuration option. Make sure this directory is shared over a HTTP webserver like apache and it is writeable by the webserver. Configure **whatsapp-\>url** to point to this same directory.
 
-Verify permissions on the **irc/signal/matrix/whatsapp-\>infile** files. They should be writable by the user running the scripts and also by the webserver that is executing the telegram webHook. Then you can start the bot.
+## Building the bot
+
+You need a working go compiler and developers tools on your system. The Makefile can be used to compile a static binary for linux or windows:
+
+```bash
+~/src/git/whatsappbot$ make
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o whatsappbot whatsappbot.go nicks.go infile.go config.go
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o whatsappbot.exe whatsappbot.go nicks.go infile.go config.go
+~/src/git/whatsappbot$
+```
+
+## Starting the bot
 
 ```bash
 $ ./whatsappbot

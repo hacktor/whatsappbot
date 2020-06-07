@@ -12,10 +12,9 @@ type Config struct {
     attach   string
     url      string
     session  string
-    sigurl   string
     teltoken string
     telchat  string
-    telurl   string
+    prefix   string
     anon     string
     bridges  []string
 }
@@ -69,20 +68,6 @@ func getConfig(c string) Config {
         cfg.nicks = t.Get("whatsapp.nicks").(string)
     }
 
-    if ! t.Has("signal.url") {
-        log.Println("signal.url undefined, using default http://example.org/signal")
-        cfg.sigurl = "http://example.org/signal"
-    } else {
-        cfg.sigurl = t.Get("signal.url").(string)
-    }
-
-    if ! t.Has("telegram.url") {
-        log.Println("telegram.url undefined, using default http://example.org/telegram")
-        cfg.telurl = "http://example.org/telegram"
-    } else {
-        cfg.telurl = t.Get("telegram.url").(string)
-    }
-
     if ! t.Has("telegram.token") {
         log.Println("telegram.url undefined")
         cfg.teltoken = ""
@@ -97,32 +82,25 @@ func getConfig(c string) Config {
         cfg.telchat = t.Get("telegram.chat_id").(string)
     }
 
+    if ! t.Has("whatsapp.prefix") {
+        log.Println("whatsapp.prefix undefined")
+        cfg.prefix = ""
+    } else {
+        cfg.prefix = t.Get("whatsapp.prefix").(string)
+    }
+
+    if ! t.Has("common.bridges") {
+        log.Println("common.bridges undefined")
+        cfg.bridges = []string{}
+    } else {
+        cfg.bridges = t.GetArray("common.bridges").([]string)
+    }
+
     if ! t.Has("common.anon") {
         log.Println("common.anon undefined")
         cfg.anon = "Anonymous"
     } else {
         cfg.anon = t.Get("common.anon").(string)
-    }
-
-    if ! t.Has("signal.infile") {
-        log.Println("signal.infile undefined, using default /tmp/tosignal.log")
-        cfg.bridges = append(cfg.bridges, "/tmp/tosignal.log")
-    } else {
-        cfg.bridges = append(cfg.bridges, t.Get("signal.infile").(string))
-    }
-
-    if ! t.Has("irc.infile") {
-        log.Println("irc.infile undefined, using default /tmp/toirc.log")
-        cfg.bridges = append(cfg.bridges, "/tmp/toirc.log")
-    } else {
-        cfg.bridges = append(cfg.bridges, t.Get("irc.infile").(string))
-    }
-
-    if ! t.Has("matrix.infile") {
-        log.Println("matrix.infile undefined, using default /tmp/tomatrix.log")
-        cfg.bridges = append(cfg.bridges, "/tmp/tomatrix.log")
-    } else {
-        cfg.bridges = append(cfg.bridges, t.Get("matrix.infile").(string))
     }
 
     return cfg

@@ -2,6 +2,7 @@ package main
 
 import (
     "encoding/gob"
+    "flag"
     "fmt"
     "log"
     "os"
@@ -80,7 +81,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
         if e != nil {
             log.Printf("Open infile failed: %v\n", e)
         }
-        fmt.Fprintf(f, "This group is bridged to IRC, Telegram, Signal and Matrix groups. Your telephone number is obfuscated when relayed to these channels. You are now known as %v. Use the !setnick command to change this\n", nick)
+        fmt.Fprintf(f, "This group is bridged to out of whatsapp. Your telephone number is obfuscated when relayed to these channels. You are now known as %v. Use the !setnick command to change this\n", nick)
         f.Close()
     case len(text) > 8 && text[:8] == "!setnick":
         parts := strings.Fields(m.Text)
@@ -92,15 +93,19 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
             }
             fmt.Fprintf(f, "%v is now known as %v.\n", nick, nnick)
             f.Close()
-            msg := "[wha] **" + nick + " is now known as " + nnick + "\n"
+            msg := cfg.prefix + "**" + nick + " is now known as " + nnick + "\n"
             relayToFile(msg, cfg.bridges)
-            relayToTelegram(msg)
+            if len(cfg.teltoken) > 0 && len(cfg.telchat) > 0 {
+                relayToTelegram(msg)
+            }
         }
     default:
-        //relay to irc, signal, matrix, telegram
-        msg := "[wha] " + nick + ": " + text + "\n"
+        //relay to bridges
+        msg := cfg.prefix + nick + ": " + text + "\n"
         relayToFile(msg, cfg.bridges)
-        relayToTelegram(msg)
+        if len(cfg.teltoken) > 0 && len(cfg.telchat) > 0 {
+            relayToTelegram(msg)
+        }
     }
 
 }
@@ -163,9 +168,11 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
         text += " with caption: " + m.Caption
     }
 
-    //relay to irc, signal, matrix, telegram
-    relayToFile("[wha] " + text + "\n", cfg.bridges)
-    relayToTelegram("[wha] " + text + "\n")
+    //relay to bridges
+    relayToFile(cfg.prefix + text + "\n", cfg.bridges)
+    if len(cfg.teltoken) > 0 && len(cfg.telchat) > 0 {
+        relayToTelegram(cfg.prefix + text + "\n")
+    }
 }
 
 // Implement HandleDocumentMessage
@@ -224,15 +231,22 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
     }
     text := "**" + nick + " sends a document: " + cfg.url + "/" + filename
 
-    //relay to irc, signal, matrix, telegram
-    relayToFile("[wha] " + text + "\n", cfg.bridges)
-    relayToTelegram("[wha] " + text + "\n")
+    //relay to bridges
+    relayToFile(cfg.prefix + text + "\n", cfg.bridges)
+    if len(cfg.teltoken) > 0 && len(cfg.telchat) > 0 {
+        relayToTelegram(cfg.prefix + text + "\n")
+    }
 }
 
 func main() {
 
     //get configuration
-    cfg = getConfig("/etc/hermod.toml")
+    var conf string
+    flag.StringVar(&conf, "conf", "/etc/hermod.toml", "Path to TOML configuration")
+    flag.Parse()
+    fmt.Println("Toml file:", conf)
+
+    cfg = getConfig(conf)
 
     //initialize Nick database
     nicks = readNicks(cfg.nicks)
@@ -278,7 +292,7 @@ func main() {
 
 func relayToFile(msg string, bridges []string) {
 
-    //relay to irc, signal, matrix
+    //relay to bridges
     for _, infile := range bridges {
 
         f, e := os.OpenFile(infile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)

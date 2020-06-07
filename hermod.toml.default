@@ -1,0 +1,20 @@
+[common]
+sendalarm       = "/home/hermod/bin/alarm"
+anon            = "Anonymous"
+bridges         = [
+    "/home/hermod/log/fromwhatsapp.log",
+    "/home/hermod/log/toanotherapp.log"
+]
+
+[telegram]
+chat_id         = "-1111111111111"
+token           = "999999999:XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+[whatsapp]
+groupid         = "11111111111-1111111111@g.us"
+infile          = "/home/hermod/log/towhatsapp.log"
+nicks           = "/home/hermod/db/whatsapp.gob"
+prefix          = "[whatsapp]"
+attachments     = "/var/www/html/whatsapp"
+session         = "/home/hermod/db/whatsappsession.gob"
+url             = "/var/www/html/whatsapp"

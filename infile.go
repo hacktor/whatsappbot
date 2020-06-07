@@ -63,14 +63,8 @@ func infile(wac *whatsapp.Conn) {
                     log.Printf("error sending message: %v", e)
                     var link string
 
-                    switch info[1] {
-                    case "TEL":
-                        link = cfg.telurl + "/" + path.Base(info[3])
-                    case "SIG":
-                        link = cfg.sigurl + "/" + path.Base(info[3])
-                    default:
-                        continue
-                    }
+                    // info[1] is the base url for the attachment
+                    link = info[1] + "/" + path.Base(info[3])
                     text = strings.Join(parts[1:], " ") + " ( " + link + " )\n"
 
                 } else {
