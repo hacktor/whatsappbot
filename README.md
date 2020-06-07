@@ -70,5 +70,5 @@ Skipping old message ....
 To make the bot survive a crash or a reboot, you might want to add a line in your crontab:
 
 ```bash
-@reboot screen -S matrix -d -m while true; do /home/hermod/bin/whatsappbot; done
+@reboot screen -S whatsapp -d -m while true; do /home/hermod/bin/whatsappbot; done
 ```
