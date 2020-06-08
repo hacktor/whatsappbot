@@ -89,11 +89,11 @@ func getConfig(c string) Config {
         cfg.prefix = t.Get("whatsapp.prefix").(string)
     }
 
-    if ! t.Has("common.bridges") {
-        log.Println("common.bridges undefined")
+    if ! t.Has("whatsapp.bridges") {
+        log.Println("whatsapp.bridges undefined")
         cfg.bridges = []string{}
     } else {
-        cfg.bridges = t.GetArray("common.bridges").([]string)
+        cfg.bridges = t.GetArray("whatsapp.bridges").([]string)
     }
 
     if ! t.Has("common.anon") {

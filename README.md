@@ -11,10 +11,6 @@ By default, a toml configuration file is read from /etc/hermod.toml
 [common]
 sendalarm       = "/home/hermod/bin/alarm"
 anon            = "Anonymous"
-bridges         = [
-    "/home/hermod/log/fromwhatsapp.log",
-    "/home/hermod/log/toanotherapp.log"
-]
 
 [telegram]
 chat_id         = "-1111111111111"
@@ -28,6 +24,10 @@ prefix          = "[whatsapp] "
 attachments     = "/var/www/html/whatsapp"
 session         = "/home/hermod/db/whatsappsession.gob"
 url             = "/var/www/html/whatsapp"
+bridges         = [
+    "/home/hermod/log/fromwhatsapp.log",
+    "/home/hermod/log/toanotherapp.log"
+]
 
 ```
 Only the [whatsapp.groupid] key is mandatory. All other keys have dummy defaults meaning they will largely be ignored. The bot listens in a whatsapp group and copies messages, prefixed with "[prefix] <anonymized>", where the whatsapp users' telephone number is replaced with a string (**common.anon** from the toml configuration if defined) and its last 4 numbers. If **whatsapp.prefix** is defined that will also be prefixed before relaying to the bridges.
