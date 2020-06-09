@@ -4,7 +4,6 @@ import (
     "fmt"
     "log"
     "os"
-    "path"
     "strings"
 
     "github.com/Rhymen/go-whatsapp/binary/proto"
@@ -61,11 +60,9 @@ func infile(wac *whatsapp.Conn) {
 
                     // upload failed; fallthrough as link
                     log.Printf("error sending message: %v", e)
-                    var link string
 
-                    // info[1] is the base url for the attachment
-                    link = info[1] + "/" + path.Base(info[3])
-                    text = strings.Join(parts[1:], " ") + " ( " + link + " )\n"
+                    // info[1] is the url for the attachment
+                    text = strings.Join(parts[1:], " ") + " ( " + info[1] + " )\n"
 
                 } else {
 
