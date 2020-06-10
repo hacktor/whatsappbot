@@ -22,7 +22,7 @@ func infile(wac *whatsapp.Conn) {
             text := line.Text
             fmt.Println(text)
 
-            if len(text) > 5 && text[:5] == "FILE:" {
+            if len(text) > 5 && text[:5] == "FILE!" {
 
                 // Get file info and upload
                 parts := strings.Fields(text)
@@ -30,16 +30,16 @@ func infile(wac *whatsapp.Conn) {
                     log.Println("Too few parts in FILE line")
                     continue
                 }
-                info := strings.Split(parts[0], ":")
+                info := strings.Split(parts[0], "!")
 
                 if len(info) < 4 {
                     log.Println("FILE info is garbage")
                     continue
                 }
 
-                img, e := os.Open(info[3])
+                img, e := os.Open(info[4])
                 if e != nil {
-                    log.Printf("Failed to open file %v: %v\n", info[3], e)
+                    log.Printf("Failed to open file %v: %v\n", info[4], e)
                     continue
                 }
 
@@ -62,7 +62,7 @@ func infile(wac *whatsapp.Conn) {
                     log.Printf("error sending message: %v", e)
 
                     // info[1] is the url for the attachment
-                    text = strings.Join(parts[1:], " ") + " ( " + info[1] + " )\n"
+                    text = strings.Join(parts[1:], " ") + " [" + info[2] + "]\n"
 
                 } else {
 
