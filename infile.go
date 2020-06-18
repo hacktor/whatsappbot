@@ -20,6 +20,9 @@ func infile(wac *whatsapp.Conn) {
         for line := range t.Lines {
 
             text := line.Text
+            if len(text) == 0 {
+                continue
+            }
             fmt.Println(text)
 
             if len(text) > 5 && text[:5] == "FILE!" {
