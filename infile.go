@@ -5,19 +5,26 @@ import (
     "log"
     "os"
     "strings"
-
+    "time"
     "github.com/Rhymen/go-whatsapp/binary/proto"
     "github.com/Rhymen/go-whatsapp"
     "github.com/hpcloud/tail"
 )
 
-func infile(wac *whatsapp.Conn) {
+func infile(wac *whatsapp.Conn, w chan int64) {
 
     // keep a tail on the infile
     loc := &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END}
     if t, e := tail.TailFile(cfg.infile, tail.Config{Follow: true, ReOpen: true, Location: loc}); e == nil {
 
         for line := range t.Lines {
+
+            // optional wait for a Reconnect
+            select {
+            case wait := <-w:
+                <-time.After(time.Duration(wait + 10) * time.Second)
+            default:
+            }
 
             text := line.Text
             if len(text) == 0 {

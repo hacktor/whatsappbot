@@ -20,6 +20,7 @@ import (
 
 type waHandler struct {
     c *whatsapp.Conn
+    wait chan int64
 }
 
 var cfg Config
@@ -30,9 +31,12 @@ var nicks = make(map[string]string)
 func (h *waHandler) HandleError(err error) {
 
     if e, ok := err.(*whatsapp.ErrConnectionFailed); ok {
+
         log.Printf("Connection failed, underlying error: %v", e.Err)
         log.Println("Waiting 30sec...")
+        h.wait <- 30
         <-time.After(30 * time.Second)
+
         log.Println("Reconnecting...")
         err := h.c.Restore()
         if err != nil {
@@ -43,15 +47,6 @@ func (h *waHandler) HandleError(err error) {
 
 // Implement HandleXXXMessage for any needed types
 func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
-
-    if &m.Info == nil {
-        log.Println("TextMessage.Info is nil")
-        return
-    }
-    if m.Info.Source == nil {
-        log.Println("ImageMessage.Info.Source is nil")
-        return
-    }
 
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n", m.Text, m.Info.Timestamp)
@@ -113,15 +108,6 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
 // Implement HandleImageMessage
 func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 
-    if &m.Info == nil {
-        log.Println("ImageMessage.Info is nil")
-        return
-    }
-    if m.Info.Source == nil {
-        log.Println("ImageMessage.Info.Source is nil")
-        return
-    }
-
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n")
         return
@@ -178,15 +164,6 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
 // Implement HandleDocumentMessage
 func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
 
-    if &m.Info == nil {
-        log.Println("DocumentMessage.Info is nil")
-        return
-    }
-    if m.Info.Source == nil {
-        log.Println("DocumentMessage.Info.Source is nil")
-        return
-    }
-
     if m.Info.Timestamp < StartTime {
         log.Printf("Skipping old message (%v) with timestamp %v\n")
         return
@@ -238,6 +215,35 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
     }
 }
 
+func (h *waHandler) HandleStickerMessage(m whatsapp.StickerMessage) {
+
+    if m.Info.Timestamp < StartTime {
+        log.Printf("Skipping old message (%v) with timestamp %v\n")
+        return
+    }
+
+    if m.Info.RemoteJid != cfg.groupid {
+        log.Printf("RemoteJid %v does not match groupid %v, skipping\n", m.Info.RemoteJid, cfg.groupid)
+        return
+    }
+
+    fmt.Printf("Sticker: %+v\n", m)
+
+    var nick string
+    if val, ok := nicks[*m.Info.Source.Participant]; ok {
+        nick = val
+    } else {
+        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
+    }
+    text := "**" + nick + " sends a Sticker"
+
+    //relay to bridges
+    relayToFile(cfg.prefix + text + "\n", cfg.bridges)
+    if len(cfg.teltoken) > 0 && len(cfg.telchat) > 0 {
+        relayToTelegram(cfg.prefix + text + "\n")
+    }
+}
+
 func main() {
 
     //get configuration
@@ -257,8 +263,11 @@ func main() {
         log.Fatalf("error creating connection: %v\n", e)
     }
 
+    //create buffered wait channel
+    w := make(chan int64, 10)
+
     //Add handlers
-    wac.AddHandler(&waHandler{wac})
+    wac.AddHandler(&waHandler{wac,w})
 
     //login or restore
     if e := login(wac); e != nil {
@@ -273,7 +282,7 @@ func main() {
     }
 
     //start reading infile
-    go infile(wac)
+    go infile(wac,w)
 
     c := make(chan os.Signal, 1)
     signal.Notify(c, os.Interrupt, syscall.SIGTERM)
