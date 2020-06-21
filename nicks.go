@@ -31,6 +31,17 @@ func setNick(n Nick, nickmap string) string {
     return ""
 }
 
+func getNick(participant string) string {
+
+    var nick string
+    if val, ok := nicks[participant]; ok {
+        nick = val
+    } else {
+        nick = getAnon(participant, cfg.anon)
+    }
+    return nick
+}
+
 func getAnon(sender string, anon string) string {
 
     //anonymize telephone number
