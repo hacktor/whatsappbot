@@ -61,12 +61,7 @@ func (*waHandler) HandleTextMessage(m whatsapp.TextMessage) {
     log.Printf("Timestamp: %v; ID: %v; Group: %v; Sender: %v; Text: %v\n",
         m.Info.Timestamp, m.Info.Id, m.Info.RemoteJid, *m.Info.Source.Participant, m.Text)
 
-    var nick string
-    if val, ok := nicks[*m.Info.Source.Participant]; ok {
-        nick = val
-    } else {
-        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
-    }
+    nick := getNick(*m.Info.Source.Participant)
     text := m.Text
 
     //scan for commands
@@ -121,11 +116,13 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
     data, e := m.Download()
     if e != nil {
         if e != whatsapp.ErrMediaDownloadFailedWith410 && e != whatsapp.ErrMediaDownloadFailedWith404 {
+            log.Printf("Download error: %v\n", e)
             return
         }
         if _, e = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); e == nil {
             data, e = m.Download()
             if e != nil {
+                log.Printf("Download error: %v\n", e)
                 return
             }
         }
@@ -135,21 +132,19 @@ func (h *waHandler) HandleImageMessage(m whatsapp.ImageMessage) {
     file, e := os.Create(cfg.attach + "/" + filename)
     defer file.Close()
     if e != nil {
+        log.Printf("Create file error: %v\n", e)
         return
     }
     _, e = file.Write(data)
     if e != nil {
+        log.Printf("Write file error: %v\n", e)
         return
     }
-    log.Printf("%v %v\n\timage received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
+    log.Printf("Image received, saved at: %v/%v\n", cfg.attach, filename)
 
-    var nick string
-    if val, ok := nicks[*m.Info.Source.Participant]; ok {
-        nick = val
-    } else {
-        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
-    }
+    nick := getNick(*m.Info.Source.Participant)
     text := "**" + nick + " sends an image: " + cfg.url + "/" + filename
+
     if len(m.Caption) > 0 {
         text += " with caption: " + m.Caption
     }
@@ -177,11 +172,13 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
     data, e := m.Download()
     if e != nil {
         if e != whatsapp.ErrMediaDownloadFailedWith410 && e != whatsapp.ErrMediaDownloadFailedWith404 {
+            log.Printf("Download file error: %v\n", e)
             return
         }
         if _, e = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); e == nil {
             data, e = m.Download()
             if e != nil {
+                log.Printf("Download file error: %v\n", e)
                 return
             }
         }
@@ -192,20 +189,17 @@ func (h *waHandler) HandleDocumentMessage(m whatsapp.DocumentMessage) {
     file, e := os.Create(cfg.attach + "/" + filename)
     defer file.Close()
     if e != nil {
+        log.Printf("Create file error: %v\n", e)
         return
     }
     _, e = file.Write(data)
     if e != nil {
+        log.Printf("Write file error: %v\n", e)
         return
     }
     log.Printf("%v %v\n\tDocument received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
 
-    var nick string
-    if val, ok := nicks[*m.Info.Source.Participant]; ok {
-        nick = val
-    } else {
-        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
-    }
+    nick := getNick(*m.Info.Source.Participant)
     text := "**" + nick + " sends a document: " + cfg.url + "/" + filename
 
     //relay to bridges
@@ -227,15 +221,37 @@ func (h *waHandler) HandleStickerMessage(m whatsapp.StickerMessage) {
         return
     }
 
-    fmt.Printf("Sticker: %+v\n", m)
-
-    var nick string
-    if val, ok := nicks[*m.Info.Source.Participant]; ok {
-        nick = val
-    } else {
-        nick = getAnon(*m.Info.Source.Participant, cfg.anon)
+    data, e := m.Download()
+    if e != nil {
+        if e != whatsapp.ErrMediaDownloadFailedWith410 && e != whatsapp.ErrMediaDownloadFailedWith404 {
+            log.Printf("Download file error: %v\n", e)
+            return
+        }
+        if _, e = h.c.LoadMediaInfo(m.Info.RemoteJid, m.Info.Id, strconv.FormatBool(m.Info.FromMe)); e == nil {
+            data, e = m.Download()
+            if e != nil {
+                log.Printf("Download file error: %v\n", e)
+                return
+            }
+        }
     }
-    text := "**" + nick + " sends a Sticker"
+
+    filename := fmt.Sprintf("%v", m.Info.Id)
+    file, e := os.Create(cfg.attach + "/" + filename)
+    defer file.Close()
+    if e != nil {
+        log.Printf("Create file error: %v\n", e)
+        return
+    }
+    _, e = file.Write(data)
+    if e != nil {
+        log.Printf("Write file error: %v\n", e)
+        return
+    }
+    log.Printf("%v %v\n\tSticker received, saved at: %v/%v\n", m.Info.Timestamp, m.Info.RemoteJid, cfg.attach, filename)
+
+    nick := getNick(*m.Info.Source.Participant)
+    text := "**" + nick + " sends a Sticker: " + cfg.url + "/" + filename
 
     //relay to bridges
     relayToFile(cfg.prefix + text + "\n", cfg.bridges)
